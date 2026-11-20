@@ -1,5 +1,7 @@
 # focus-one
 
+**English** | [한국어](README.ko.md)
+
 A Claude Code plugin. While you wait for one answer, you write the next question in a memo pad instead of opening a new session right away.
 
 - **⚡ Simple tasks**: work where you only need the result. Press ⏎ to open a new Claude Code session.
