@@ -1,0 +1,16 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-marketplace.json",
+  "name": "focus-one",
+  "description": "Park new questions in a memo pad instead of switching context.",
+  "owner": {
+    "name": "whattheyeb"
+  },
+  "plugins": [
+    {
+      "name": "focus-one",
+      "description": "Memo pad with simple-task and learning areas that open new Claude Code sessions.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

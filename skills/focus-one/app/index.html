@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>focus-one</title>
+<style>
+  /* Obsidian Retroma + "Denim Blue" snippet palette (base #296B9E).
+     The snippet sets Retroma's background chroma (--rtm-c-accent) to 0, so every neutral
+     (bg, frame, line, ink, title bar, bevel, hover) is a gray with the same lightness as the
+     old blue-tinted value. Accent colors (primary, tabs, headings, selection) stay colored.
+     Light-mode body text (--ink) is the snippet's slate charcoal #1F2933, set directly in Obsidian.
+     Previous blue-tinted neutrals, light: bg #B9CDDF, frame #A8C1D8, ink #2C4256, muted #627A8F,
+     line #D2DEE9, title-bg #8FA2BC, title-ink #0B1629, toast-bg #1D4E75. */
+  :root {
+    --bg: #D8D8D8; --paper: #F5F6F7; --frame: #BBBBBB; --ink: #1F2933; --muted: #767676; --line: #DBDBDB;
+    --title-bg: #9F9F9F; --title-ink: #161616; --hover: rgba(102, 102, 102, .08); --select: rgba(41, 107, 158, .2);
+    --simple: #9F5526; --learning: #90518B; --log: #00797A; --primary: #296B9E; --ai: #296B9E; --run: #C9822F; --question: #5B7FA6; --idea: #357950;
+    --navy: #1D4E75; --on-accent: #fff; --warn-bg: #F6E3B4; --warn-line: #C9822F;
+    --bevel-dark: rgba(72, 72, 72, .55); --bevel-light: rgba(255, 255, 255, .85);
+    --toast-bg: #4B4B4B; --toast-ink: #F5F6F7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #040404; --paper: #121212; --frame: #2E2E2E; --ink: #B6B6B6; --muted: #848484; --line: #222222;
+      --title-bg: #191919; --title-ink: #C3C3C3; --hover: rgba(162, 162, 162, .08); --select: rgba(111, 168, 214, .25);
+      --simple: #EFA880; --learning: #DFA3D9; --log: #62CFCE; --primary: #6FA8D6; --ai: #6FA8D6; --run: #E9A85C; --question: #8FAACC; --idea: #8BC8A0;
+      --navy: #9CC8EE; --on-accent: #00101C; --warn-bg: #2E2414; --warn-line: #9C7032;
+      --bevel-dark: rgba(0, 0, 0, .65); --bevel-light: rgba(174, 174, 174, .16);
+      --toast-bg: #2E2E2E; --toast-ink: #EBEBEB;
+    }
+  }
+  :root {
+    color-scheme: light dark;
+    --mono: "D2Coding", "Cascadia Mono", ui-monospace, Menlo, Consolas, monospace;
+    /* Retroma's 3D buttons: light from the top-left, 2px bevel */
+    --bevel: inset -2px -2px 0 var(--bevel-dark), inset 2px 2px 0 var(--bevel-light);
+    --bevel-in: inset 2px 2px 0 var(--bevel-dark), inset -2px -2px 0 var(--bevel-light);
+    --bevel-on-accent: inset -2px -2px 0 rgba(0, 0, 0, .28), inset 2px 2px 0 rgba(255, 255, 255, .35);
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: var(--select); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 "Pretendard", "Pretendard Variable", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, "Segoe UI", sans-serif;
+  }
+  code { font-family: var(--mono); }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+  header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 6px 8px 6px 14px;
+    background: var(--title-bg); color: var(--title-ink); border: 4px ridge var(--frame); border-radius: 10px;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; color: var(--title-ink); }
+  header .cwd { flex: 1; min-width: 0; display: flex; gap: 6px; }
+  header input {
+    flex: 1; min-width: 0; font: 12px var(--mono); color: var(--title-ink); opacity: .75;
+    background: transparent; border: 0; border-radius: 6px; padding: 4px 6px;
+  }
+  header input:focus { outline: none; opacity: 1; color: var(--ink); background: var(--paper); box-shadow: var(--bevel-in); }
+  /* Folder candidates: attached right under the path box, same width */
+  header .cwd { position: relative; }
+  header .cwd.open input { border-radius: 6px 6px 0 0; }
+  #cwd-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20; display: none;
+    margin: 0; padding: 2px 0 4px; list-style: none; max-height: 300px; overflow-y: auto;
+    background: var(--paper); color: var(--ink); border: 1px solid var(--frame); border-top: 0;
+    border-radius: 0 0 6px 6px; box-shadow: 0 6px 14px rgba(0, 0, 0, .18); font: 12px var(--mono);
+    scrollbar-color: var(--frame) transparent;
+  }
+  #cwd-list.on { display: block; }
+  #cwd-list .group { padding: 5px 8px 2px; font-size: 11px; color: var(--muted); }
+  #cwd-list .opt { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #cwd-list .opt:hover { background: var(--hover); }
+  #cwd-list .opt.active { background: var(--select); }
+  #cwd-list .opt b { font-weight: 600; }
+  #cwd-list .opt.current b { color: var(--primary); }
+  #cwd-list .opt .dim { color: var(--muted); margin-left: 6px; }
+  button.ghost {
+    font: inherit; font-size: 12px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--frame); border-radius: 6px; padding: 4px 9px; cursor: pointer; box-shadow: var(--bevel);
+  }
+  button.ghost:hover:not(:disabled) { color: var(--navy); }
+  button.ghost:active:not(:disabled) { box-shadow: var(--bevel-in); }
+  .skills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 14px; }
+  .skills:empty { display: none; }
+  .skills .label { font-size: 12px; color: var(--muted); }
+  .skills button {
+    font: 12px var(--mono); color: var(--primary); background: var(--paper);
+    border: 1px solid var(--primary); border-radius: 99px; padding: 3px 10px; cursor: pointer;
+  }
+  .skills button:hover { background: var(--hover); }
+  .skills button.on { background: var(--primary); color: var(--on-accent); }
+  .pad {
+    background: var(--paper); border: 4px groove var(--frame); border-radius: 10px;
+    box-shadow: inset 5px 0 0 var(--accent); padding: 12px 14px 10px 19px; margin-bottom: 16px;
+  }
+  .pad.simple { --accent: var(--simple); }
+  .pad.learning { --accent: var(--learning); }
+  .pad.log { --accent: var(--log); }
+  .log .day { display: flex; align-items: center; gap: 8px; margin: 2px 0 4px; font-size: 12px; color: var(--muted); }
+  .log .day::after { content: ""; flex: 1; border-top: 1px dashed var(--frame); }
+  ol.entries { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; scrollbar-color: var(--frame) transparent; }
+  ol.entries li { display: grid; grid-template-columns: 46px auto 1fr auto; align-items: baseline; gap: 8px;
+    padding: 5px 4px; border-bottom: 1px solid var(--line); border-radius: 4px; }
+  ol.entries li:hover, ol.entries li.editing { background: var(--hover); }
+  ol.entries li:last-child { border-bottom: 0; }
+  ol.entries li.empty { display: block; font-size: 13px; color: var(--muted); }
+  ol.entries li.empty:hover { background: none; }
+  ol.entries time { font: 13px var(--mono); color: var(--navy); font-variant-numeric: tabular-nums; }
+  ol.entries .chip { font-size: 11px; border-radius: 99px; padding: 0 7px; border: 1px solid currentColor; white-space: nowrap; }
+  ol.entries .chip.ai_dev, ol.entries .chip.ai_study { color: var(--ai); }
+  ol.entries .chip.run { color: var(--run); }
+  ol.entries .chip.question { color: var(--question); }
+  ol.entries .chip.idea { color: var(--idea); }
+  ol.entries .chip.none { color: var(--muted); border-style: dashed; }
+  ol.entries select.kind { font-size: 12px; padding: 1px 2px; }
+  ol.entries .txt { min-width: 0; overflow-wrap: anywhere; }
+  ol.entries .edit-box { min-width: 0; width: 100%; border: 0; border-bottom: 2px solid var(--log); outline: none;
+    background: transparent; color: var(--ink); font: inherit; padding: 0 2px; }
+  ol.entries .dur { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  ol.entries .dur.live { color: var(--log); }
+  ol.entries .acts { visibility: hidden; display: inline-flex; gap: 6px; margin-left: 6px; }
+  ol.entries .acts button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 0; }
+  ol.entries .acts button:hover { color: var(--primary); }
+  ol.entries li:hover .acts, ol.entries li:focus-within .acts, ol.entries li.editing .acts { visibility: visible; }
+  .compose { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--frame); flex-wrap: wrap; }
+  select.kind { flex: none; font: inherit; font-size: 12px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--frame); border-radius: 6px; padding: 4px 6px; cursor: pointer; box-shadow: var(--bevel); }
+  select.kind:focus { outline: none; border-color: var(--log); }
+  .now { flex: none; display: flex; align-items: baseline; gap: 4px; font-size: 12px; color: var(--muted); }
+  .now b { font: 600 15px var(--mono); color: var(--log); font-variant-numeric: tabular-nums; }
+  .compose .field { flex: 1; min-width: 180px; display: flex; align-items: center; gap: 8px; }
+  .compose input { flex: 1; min-width: 0; border: 0; border-bottom: 2px solid var(--frame); background: transparent;
+    color: var(--ink); font: inherit; padding: 4px 2px; }
+  .compose input:focus { outline: none; border-bottom-color: var(--log); }
+  .log .send { margin-left: 0; }
+  @media (max-width: 480px) {
+    ol.entries li { grid-template-columns: 44px auto 1fr; }
+    ol.entries .dur { grid-column: 3; justify-self: start; }
+  }
+  .pad-head button.ghost { align-self: center; display: inline-flex; align-items: center; gap: 4px; }
+  .pad-head button.ghost:disabled { opacity: .5; cursor: default; }
+  .pad-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .pad-head h2 { font-size: 15px; margin: 0; color: var(--accent); }
+  .pad-head .hint { flex: 1; font-size: 12px; color: var(--muted); }
+  .pad-head .badge {
+    font-size: 12px; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 99px; padding: 0 8px; display: none;
+  }
+  .pad-head .badge.on { display: inline-block; }
+  .pad-head .add {
+    align-self: center; width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--paper); color: var(--accent); font-size: 17px; line-height: 1; box-shadow: var(--bevel);
+  }
+  .pad-head .add:active { box-shadow: var(--bevel-in); }
+  .memo + .memo { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--frame); }
+  .memo .remove { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; cursor: pointer; }
+  .memo .remove:hover { color: var(--primary); }
+  .memo:only-child .remove { display: none; }
+  textarea {
+    width: 100%; min-height: 110px; resize: vertical; border: 0; outline: none; background:
+      repeating-linear-gradient(var(--paper), var(--paper) 25px, var(--line) 25px, var(--line) 26px);
+    color: var(--ink); font: inherit; line-height: 26px; padding: 0 2px;
+  }
+  textarea::placeholder, input::placeholder { color: var(--muted); opacity: .75; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .row .kbd { font-size: 12px; color: var(--muted); }
+  .send {
+    margin-left: auto; width: 44px; height: 36px; border-radius: 6px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--on-accent); font-size: 20px; line-height: 1; box-shadow: var(--bevel-on-accent);
+  }
+  .send:hover:not(:disabled) { filter: brightness(1.08); }
+  .send:active:not(:disabled) { box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .28), inset -2px -2px 0 rgba(255, 255, 255, .2); }
+  .send:disabled { opacity: .45; cursor: default; }
+  .warn {
+    display: none; margin-top: 8px; padding: 8px 10px; border-radius: 6px;
+    background: var(--warn-bg); border: 2px ridge var(--warn-line); font-size: 13px;
+  }
+  .warn.on { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .warn span { flex: 1; min-width: 180px; }
+  .warn button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--warn-line); background: var(--paper); color: var(--ink); box-shadow: var(--bevel); }
+  .warn button:active { box-shadow: var(--bevel-in); }
+  .manual { display: none; margin-top: 8px; font-size: 12px; }
+  .manual.on { display: block; }
+  .manual code { display: block; padding: 6px 8px; border-radius: 6px; background: var(--bg); border: 2px solid var(--frame);
+    font: 12px var(--mono); overflow-x: auto; white-space: pre; }
+  ul.recent { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--frame); }
+  ul.recent:empty { display: none; }
+  ul.recent li { font-size: 13px; color: var(--muted); display: flex; gap: 8px; padding: 1px 0; }
+  ul.recent time { flex: none; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  ul.recent .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul.recent .resume {
+    flex: none; font: inherit; font-size: 12px; color: var(--accent); background: var(--paper); cursor: pointer;
+    border: 1px solid var(--frame); border-radius: 6px; padding: 0 8px; box-shadow: var(--bevel);
+  }
+  ul.recent .resume:active { box-shadow: var(--bevel-in); }
+  ul.recent .open { flex: none; font-size: 12px; color: var(--accent); }
+  #toast {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--toast-bg); color: var(--toast-ink);
+    padding: 8px 14px; border: 3px ridge var(--frame); border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.on { opacity: .95; }
+
+  /* Session tabs: each session runs in a terminal inside this page (Windows) */
+  nav#tabs {
+    position: sticky; top: 0; z-index: 5; display: none; align-items: flex-end; gap: 4px;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding: 8px 16px 0;
+    /* The bottom rule is painted inside the box (not a border), so tabs can cover it without overflowing,
+       which would otherwise add a vertical scrollbar. */
+    background: linear-gradient(var(--frame), var(--frame)) bottom / 100% 3px no-repeat, var(--bg);
+  }
+  body.has-terms nav#tabs { display: flex; }
+  nav#tabs .tab {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 230px;
+    font: inherit; font-size: 12px; color: var(--muted); background: var(--bg); cursor: pointer;
+    border: 1px solid var(--frame); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 5px 8px 6px 10px; box-shadow: var(--bevel);
+  }
+  nav#tabs .tab:hover { color: var(--ink); }
+  nav#tabs .tab.on { color: var(--ink); font-weight: 600; background: var(--paper); box-shadow: inset 0 3px 0 var(--accent, var(--primary)); }
+  nav#tabs .tab.simple { --accent: var(--simple); }
+  nav#tabs .tab.learning { --accent: var(--learning); }
+  nav#tabs .tab .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  nav#tabs .tab.done .dot { background: none; border: 1.5px solid var(--muted); }
+  nav#tabs .tab.unread:not(.on) .label { color: var(--accent); }
+  nav#tabs .tab .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  nav#tabs .tab .x { flex: none; padding: 0 4px; border-radius: 4px; color: var(--muted); font-weight: 400; }
+  nav#tabs .tab .x:hover { color: var(--ink); background: var(--hover); }
+  nav#tabs .tab .x.arm { color: var(--paper); background: var(--simple); }
+  #termview {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; top: var(--tabs-h, 40px);
+    flex-direction: column; gap: 6px; padding: 10px 16px 16px;
+  }
+  body.view-term main { display: none; }
+  body.view-term #termview { display: flex; }
+  #termview .bar { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); min-width: 0; }
+  #termview .bar .k { flex: none; font-weight: 600; color: var(--accent); }
+  #termview .bar .q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+  #termview .bar .cwd { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+  #termview .bar .st { flex: none; }
+  #termview .screen {
+    flex: 1; min-height: 0; position: relative; background: #D4D4D4;
+    border: 4px groove var(--frame); border-radius: 10px; padding: 6px 2px 4px 8px;
+  }
+  #termview .xt { position: absolute; inset: 6px 2px 4px 8px; }
+  #termview .xt[hidden] { display: none; }
+</style>
+<link rel="stylesheet" href="/vendor/xterm.css">
+</head>
+<body>
+<nav id="tabs" aria-label="세션"></nav>
+<main>
+  <header>
+    <h1>focus-one</h1>
+    <div class="cwd">
+      <input id="cwd" title="새 세션이 열릴 폴더 · ↑↓ 후보 선택 · Tab 하위 폴더 보기 · Enter 변경 · Esc 닫기" spellcheck="false"
+             autocomplete="off" role="combobox" aria-controls="cwd-list" aria-expanded="false">
+      <ul id="cwd-list" role="listbox" aria-label="폴더 후보"></ul>
+    </div>
+    <button class="ghost" id="stop" title="메모장 서버 종료">종료</button>
+  </header>
+  <div class="skills" id="skills" title="고른 스킬은 다음에 보내는 질문 앞에 붙습니다"></div>
+
+  <section class="pad simple" data-kind="simple">
+    <div class="pad-head"><h2>단순처리</h2><span class="hint">결과물만 받으면 되는 작업</span><span class="badge"></span><button class="add" title="질문 메모칸 추가">+</button></div>
+    <div class="memos">
+      <div class="memo">
+        <textarea placeholder="예: 평가 스크립트에 CSV 출력 기능 추가"></textarea>
+        <div class="row"><span class="kbd">Ctrl/⌘ + Enter</span><button class="remove" title="이 메모칸 삭제">삭제</button><button class="send" title="새 세션에서 실행">⏎</button></div>
+      </div>
+    </div>
+    <div class="warn"></div>
+    <div class="manual">터미널을 찾지 못했습니다. 아래 명령을 직접 실행하세요.<code></code></div>
+    <ul class="recent"></ul>
+  </section>
+
+  <section class="pad learning" data-kind="learning">
+    <div class="pad-head"><h2>학습</h2><span class="hint">이해하는 것이 목적인 질문</span><span class="badge"></span><button class="add" title="질문 메모칸 추가">+</button></div>
+    <div class="memos">
+      <div class="memo">
+        <textarea placeholder="예: ViT는 CNN과 무엇이 다른가?"></textarea>
+        <div class="row"><span class="kbd">Ctrl/⌘ + Enter</span><button class="remove" title="이 메모칸 삭제">삭제</button><button class="send" title="새 세션에서 실행">⏎</button></div>
+      </div>
+    </div>
+    <div class="warn"><span></span><button data-act="force">그래도 열기</button><button data-act="cancel">나중에</button></div>
+    <div class="manual">터미널을 찾지 못했습니다. 아래 명령을 직접 실행하세요.<code></code></div>
+    <ul class="recent"></ul>
+  </section>
+
+  <section class="pad log" id="log">
+    <div class="pad-head"><h2>업무로그</h2><span class="hint">지금 무엇을 하고 있는지 시간과 함께 기록 · 오늘 기록만 표시 · <span class="logfile">업무로그 폴더의 날짜.md</span>에 자동 저장 · 태그를 고르지 않은 기록은 1시간마다 자동으로 태그</span><button class="ghost tag" title="태그 없는 기록에 지금 바로 자동 태그 붙이기 (claude -p 1회 실행)">지금 태그 붙이기</button><button class="ghost copy" title="오늘 기록을 업무 로그용 텍스트로 복사">오늘 기록 복사</button></div>
+    <div class="day"></div>
+    <ol class="entries"></ol>
+    <div class="compose">
+      <select class="kind" id="log-kind" aria-label="태그" title="고르지 않으면 1시간마다 자동으로 태그가 붙습니다">
+        <option value="">태그: 자동</option>
+        <optgroup label="AI">
+          <option value="ai_dev">AI · 개발</option>
+          <option value="ai_study">AI · 개념공부/코드이해</option>
+        </optgroup>
+        <option value="run">코드 실행</option>
+        <option value="question">질문</option>
+        <option value="idea">아이디어</option>
+      </select>
+      <label class="now" for="log-entry">지금 시간 <b>--:--</b></label>
+      <div class="field">
+        <input id="log-entry" autocomplete="off" placeholder="지금 하고 있는 작업">
+        <button class="send" title="기록 (Enter)" disabled>⏎</button>
+      </div>
+    </div>
+    <div class="row"><span class="kbd">Enter로 기록 · 태그는 기록마다 자동으로 돌아감 · 오른쪽 숫자는 다음 기록까지 걸린 시간 · 수정에서 태그도 변경, Enter 저장, Esc 취소</span></div>
+  </section>
+</main>
+<section id="termview" aria-label="세션 터미널">
+  <div class="bar"><span class="k"></span><span class="q"></span><span class="cwd"></span><span class="st"></span></div>
+  <div class="screen"></div>
+</section>
+<div id="toast"></div>
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script>
+const TOKEN = "__FOCUS_TOKEN__";
+const $ = (s, el = document) => el.querySelector(s);
+// Each tab keeps its own folder in the URL (?cwd=...), so tabs for different folders do not clash.
+let CWD = new URLSearchParams(location.search).get("cwd") || "";
+// Lets the server count open tabs, so the stop button only shuts it down from the last one.
+const TAB = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
+let closed = false, left = false;
+const pads = Object.fromEntries([...document.querySelectorAll(".pad[data-kind]")].map(p => [p.dataset.kind, p]));
+
+async function api(path, body, keepalive = false) {
+  const opt = { headers: { "X-Focus-Token": TOKEN, "X-Focus-Cwd": encodeURIComponent(CWD) }, keepalive };
+  if (!closed && !left) opt.headers["X-Focus-Tab"] = TAB;
+  if (body !== undefined) {
+    opt.method = "POST";
+    opt.headers["Content-Type"] = "application/json";
+    opt.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opt);
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  return { status: res.status, data };
+}
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+function renderRecent(kind, items) {
+  const ul = $("ul.recent", pads[kind]);
+  ul.replaceChildren(...items.map(it => {
+    const li = document.createElement("li");
+    const time = document.createElement("time");
+    time.textContent = it.time.slice(5);
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = (it.title || it.text).replace(/\s+/g, " ");
+    t.title = it.title ? `${it.title}\n\n${it.text}` : it.text;
+    li.append(time, t);
+    if (it.open) {
+      const s = document.createElement("span");
+      s.className = "open";
+      s.textContent = "열려 있음";
+      li.append(s);
+    } else if (it.resumable) {
+      const b = document.createElement("button");
+      b.className = "resume";
+      b.textContent = "이어하기";
+      b.title = `claude --resume ${it.session}`;
+      b.dataset.session = it.session;
+      li.append(b);
+    }
+    return li;
+  }));
+}
+
+async function resume(btn) {
+  btn.disabled = true;
+  const { status, data } = await api("/api/resume", { session: btn.dataset.session }).catch(() => ({ status: 0, data: {} }));
+  if (status !== 200) { btn.disabled = false; toast(data.error || "세션을 열지 못했습니다."); return; }
+  const manual = $(".manual", pads[data.kind]);
+  manual.classList.toggle("on", !!data.manual);
+  if (data.manual) $("code", manual).textContent = data.manual;
+  if (data.term) sessions.focusNext = data.term;
+  toast("세션을 다시 열었습니다.");
+  refresh();
+}
+
+const skills = { list: [], picked: null };
+
+function renderSkills(list) {
+  if (list.join("\n") === skills.list.join("\n")) return;
+  skills.list = list;
+  if (!list.includes(skills.picked)) skills.picked = null;
+  const box = $("#skills");
+  if (!list.length) { box.replaceChildren(); return; }
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "최근 스킬";
+  box.replaceChildren(label, ...list.map(name => {
+    const b = document.createElement("button");
+    b.textContent = "/" + name.split(":").pop();
+    b.title = "/" + name;
+    b.dataset.skill = name;
+    b.classList.toggle("on", name === skills.picked);
+    return b;
+  }));
+}
+
+function pickSkill(name) {
+  skills.picked = skills.picked === name ? null : name;
+  for (const b of document.querySelectorAll("#skills button")) b.classList.toggle("on", b.dataset.skill === skills.picked);
+}
+
+$("#skills").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b) pickSkill(b.dataset.skill);
+});
+
+async function refresh() {
+  const { status, data } = await api("/api/state").catch(() => ({ status: 0 }));
+  if (status !== 200) return;
+  running = data.running || 0;
+  if (!CWD) setCwd(data.cwd);
+  const cwd = $("#cwd");
+  if (document.activeElement !== cwd) cwd.value = data.cwd;
+  renderSkills(data.skills || []);
+  for (const kind of Object.keys(pads)) {
+    const n = data.active[kind] || 0;
+    const badge = $(".badge", pads[kind]);
+    badge.textContent = `진행 중 ${n}`;
+    badge.classList.toggle("on", n > 0);
+    renderRecent(kind, data.recent[kind] || []);
+  }
+}
+
+function addMemo(kind) {
+  const list = $(".memos", pads[kind]);
+  const memo = list.firstElementChild.cloneNode(true);
+  const ta = $("textarea", memo);
+  ta.value = "";
+  ta.placeholder = "따로 보낼 질문";
+  $(".send", memo).disabled = false;
+  list.append(memo);
+  ta.focus();
+}
+
+function removeMemo(memo) {
+  const list = memo.parentElement;
+  if (list.children.length <= 1) { $("textarea", memo).value = ""; return; }
+  const next = memo.nextElementSibling || memo.previousElementSibling;
+  const pad = memo.closest(".pad");
+  if (pad.pending === memo) { pad.pending = null; $(".warn", pad).classList.remove("on"); }
+  memo.remove();
+  $("textarea", next).focus();
+}
+
+async function send(kind, memo, force = false) {
+  const pad = pads[kind];
+  if (!memo || !memo.isConnected) return;
+  const ta = $("textarea", memo);
+  const btn = $(".send", memo);
+  let text = ta.value.trim();
+  if (!text) { ta.focus(); return; }
+  if (skills.picked) text = `/${skills.picked} ${text}`;
+  btn.disabled = true;
+  try {
+    const { status, data } = await api("/api/send", { kind, text, force });
+    const warn = $(".warn", pad);
+    if (status === 409) {
+      pad.pending = memo;
+      $("span", warn).textContent = `${data.warning} 지금 질문을 끝낸 뒤에 여는 것을 권합니다.`;
+      warn.classList.add("on");
+      return;
+    }
+    pad.pending = null;
+    warn.classList.remove("on");
+    if (status !== 200) { toast(data.error || "전송하지 못했습니다."); return; }
+    const manual = $(".manual", pad);
+    manual.classList.toggle("on", !!data.manual);
+    if (data.manual) $("code", manual).textContent = data.manual;
+    removeMemo(memo);
+    if (skills.picked) pickSkill(skills.picked);
+    // A learning question is meant to be followed, so its tab opens; simple tasks run in the background.
+    if (data.term && kind === "learning") sessions.focusNext = data.term;
+    toast(data.term && kind !== "learning" ? "새 세션을 위쪽 탭에서 열었습니다." : "새 세션을 열었습니다.");
+    refresh();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+for (const [kind, pad] of Object.entries(pads)) {
+  $(".add", pad).addEventListener("click", () => addMemo(kind));
+  const list = $(".memos", pad);
+  list.addEventListener("click", e => {
+    const memo = e.target.closest(".memo");
+    if (e.target.closest(".send")) send(kind, memo);
+    if (e.target.closest(".remove")) removeMemo(memo);
+  });
+  list.addEventListener("keydown", e => {
+    if (e.target.tagName !== "TEXTAREA" || e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    send(kind, e.target.closest(".memo"));
+  });
+  $("ul.recent", pad).addEventListener("click", e => {
+    const b = e.target.closest(".resume");
+    if (b) resume(b);
+  });
+  const warn = $(".warn", pad);
+  warn.addEventListener("click", e => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (act === "force") send(kind, pad.pending, true);
+    if (act === "cancel") { pad.pending = null; warn.classList.remove("on"); }
+  });
+}
+
+function setCwd(cwd) {
+  CWD = cwd;
+  history.replaceState(null, "", "?cwd=" + encodeURIComponent(cwd));
+  document.title = "focus-one · " + cwd.split(/[\/]/).filter(Boolean).pop();
+}
+
+async function applyCwd(value) {
+  closeCwdList();
+  const { status, data } = await api("/api/cwd", { cwd: value }).catch(() => ({ status: 0, data: {} }));
+  if (status === 200) {
+    setCwd(data.cwd);
+    worklog.editing = -1;
+    worklog.load();
+  }
+  toast(status === 200 ? "폴더를 변경했습니다." : (data.error || "변경하지 못했습니다."));
+  cwdBox.blur();
+  refresh();
+}
+
+// ---------------------------------------------------------------- folder candidates under the path box
+// Two groups: recently used folders (filtered by what is typed) and the subfolders of the typed path.
+// While the box still holds the current folder, the second group is the current folder's subfolders.
+const cwdBox = $("#cwd"), cwdList = $("#cwd-list");
+const cwdPick = { items: [], active: -1, seq: 0, timer: 0 };
+const sepOf = p => p.includes("\\") ? "\\" : "/";
+const withSep = p => p.replace(/[\\/]+$/, "") + sepOf(p);
+
+async function loadCwdList() {
+  const seq = ++cwdPick.seq;  // a slower, older reply must not overwrite a newer one
+  const v = cwdBox.value.trim();
+  const edited = !!v && v !== CWD;
+  const q = edited ? v : (CWD ? withSep(CWD) : "");
+  const { status, data } = await api("/api/dirs", { q }).catch(() => ({ status: 0 }));
+  if (seq !== cwdPick.seq || document.activeElement !== cwdBox) return;
+  if (status !== 200) { closeCwdList(); return; }
+  const low = v.toLowerCase();
+  const recent = (data.recent || []).filter(p => !edited || p.toLowerCase().includes(low));
+  const seen = new Set(recent);
+  const children = (data.children || []).filter(p => !seen.has(p));
+  renderCwdList([["최근 폴더", recent], [edited ? "일치하는 폴더" : "하위 폴더", children]]);
+}
+
+function renderCwdList(groups) {
+  cwdPick.items = [];
+  cwdPick.active = -1;
+  const nodes = [];
+  for (const [label, paths] of groups) {
+    if (!paths.length) continue;
+    const g = document.createElement("li");
+    g.className = "group";
+    g.textContent = label;
+    nodes.push(g);
+    for (const p of paths) {
+      // Folder name first and the parent path after it, so a long path is cut at the parent, not the name.
+      const m = p.match(/^(.*[\\/])([^\\/]+)[\\/]?$/);
+      const li = document.createElement("li");
+      li.className = "opt" + (p === CWD ? " current" : "");
+      li.setAttribute("role", "option");
+      li.dataset.i = cwdPick.items.length;
+      li.title = p;
+      const name = document.createElement("b");
+      name.textContent = m ? m[2] : p;
+      const dir = document.createElement("span");
+      dir.className = "dim";
+      dir.textContent = m ? m[1] : "";
+      li.append(name, dir);
+      cwdPick.items.push(p);
+      nodes.push(li);
+    }
+  }
+  cwdList.replaceChildren(...nodes);
+  showCwdList(nodes.length > 0);
+}
+
+function showCwdList(on) {
+  cwdList.classList.toggle("on", on);
+  cwdBox.parentElement.classList.toggle("open", on);
+  cwdBox.setAttribute("aria-expanded", String(on));
+}
+
+function closeCwdList() {
+  cwdPick.seq++;
+  clearTimeout(cwdPick.timer);
+  cwdPick.items = [];
+  cwdPick.active = -1;
+  cwdList.replaceChildren();
+  showCwdList(false);
+}
+
+function setCwdActive(i) {
+  cwdPick.active = i;
+  for (const li of cwdList.querySelectorAll(".opt")) {
+    const on = Number(li.dataset.i) === i;
+    li.classList.toggle("active", on);
+    if (on) li.scrollIntoView({ block: "nearest" });
+  }
+}
+
+cwdBox.addEventListener("focus", () => loadCwdList());
+cwdBox.addEventListener("blur", () => closeCwdList());
+cwdBox.addEventListener("input", () => {
+  clearTimeout(cwdPick.timer);
+  cwdPick.timer = setTimeout(loadCwdList, 120);
+});
+cwdBox.addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  const n = cwdPick.items.length;
+  const open = cwdList.classList.contains("on");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!open) { loadCwdList(); return; }
+    if (!n) return;
+    const step = e.key === "ArrowDown" ? 1 : -1;
+    setCwdActive(cwdPick.active < 0 ? (step > 0 ? 0 : n - 1) : (cwdPick.active + step + n) % n);
+  } else if (e.key === "Tab" && open && cwdPick.active >= 0) {
+    // Puts the highlighted folder in the box and lists its subfolders, without switching to it yet.
+    e.preventDefault();
+    cwdBox.value = withSep(cwdPick.items[cwdPick.active]);
+    loadCwdList();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    applyCwd(open && cwdPick.active >= 0 ? cwdPick.items[cwdPick.active] : cwdBox.value);
+  } else if (e.key === "Escape" && open) {
+    e.preventDefault();
+    closeCwdList();
+  }
+});
+// mousedown would move the focus out of the box (and close the list) before the click lands.
+cwdList.addEventListener("mousedown", e => e.preventDefault());
+cwdList.addEventListener("click", e => {
+  const li = e.target.closest(".opt");
+  if (li) applyCwd(cwdPick.items[Number(li.dataset.i)]);
+});
+
+let running = 0;  // sessions running inside the server; they end when it stops
+$("#stop").addEventListener("click", async e => {
+  const b = e.currentTarget;
+  if (running && !b.armed) {
+    b.armed = true;
+    b.textContent = `세션 ${running}개도 종료`;
+    toast("서버가 꺼지면 열린 세션도 함께 종료됩니다. 한 번 더 누르면 종료합니다.");
+    setTimeout(() => { b.armed = false; b.textContent = "종료"; }, 4000);
+    return;
+  }
+  const { data } = await api("/api/stop", {}).catch(() => ({ data: { stopped: true } }));
+  closed = true;
+  clearInterval(poll);
+  document.body.innerHTML = data.stopped
+    ? '<main><p>focus-one 서버를 종료했습니다. 다시 열려면 <code>/focus-one</code>을 실행하세요.</p></main>'
+    : `<main><p>이 메모장을 닫았습니다. 다른 메모장 탭 ${data.remaining}개가 열려 있어 서버는 계속 실행됩니다.</p></main>`;
+});
+
+window.addEventListener("pagehide", () => {
+  if (!closed && !left) { api("/api/leave", {}, true).catch(() => {}); left = true; }
+});
+window.addEventListener("pageshow", e => { if (e.persisted) left = false; });
+
+// Keys match WORKLOG_KINDS in focus_one.py. "" is an entry waiting for the hourly auto-tagger.
+const WORKLOG_KINDS = {
+  ai_dev: "AI/개발", ai_study: "AI/개념공부/코드이해", run: "코드 실행", question: "질문", idea: "아이디어",
+};
+const kindLabel = kind => WORKLOG_KINDS[kind] || "태그 대기";
+const two = n => String(n).padStart(2, "0");
+const hhmm = d => `${two(d.getHours())}:${two(d.getMinutes())}`;
+const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
+const minutesOf = hm => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
+
+// Today's entries only. The server keeps them in <worklog dir>/YYYY-MM-DD.md (shared by every tab) and stamps the time of each new one.
+const worklog = {
+  pad: $("#log"),
+  list: $("#log ol.entries"),
+  input: $("#log-entry"),
+  kindSel: $("#log-kind"),
+  addBtn: $("#log .compose .send"),
+  tagBtn: $("#log .tag"),
+  entries: [],
+  editing: -1,
+  async load() {
+    const { status, data } = await api("/api/worklog").catch(() => ({ status: 0 }));
+    if (status !== 200) return;
+    this.setTagging(data.tagging);
+    if (data.file) $(".logfile", this.pad).title = data.file;
+    if (this.editing < 0) { this.entries = data.entries; this.render(); }
+  },
+  setTagging(on) {
+    this.tagBtn.disabled = !!on;
+    this.tagBtn.textContent = on ? "태그 붙이는 중" : "지금 태그 붙이기";
+  },
+  render() {
+    const now = new Date();
+    $(".now b", this.pad).textContent = hhmm(now);
+    $(".day", this.pad).textContent = now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
+    if (!this.entries.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "오늘 기록이 없습니다. 아래 칸에 지금 하는 일을 적고 Enter를 누르세요.";
+      this.list.replaceChildren(li);
+      return;
+    }
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    this.list.replaceChildren(...this.entries.map((e, i) => {
+      const li = document.createElement("li");
+      li.classList.toggle("editing", i === this.editing);
+      const time = document.createElement("time");
+      time.textContent = e.time;
+      let chip, txt;
+      if (i === this.editing) {
+        chip = this.kindSel.cloneNode(true);
+        chip.id = "log-edit-kind";
+        chip.value = e.kind;
+        chip.setAttribute("aria-label", "태그 수정");
+        txt = document.createElement("input");
+        txt.className = "edit-box";
+        txt.id = "log-edit";
+        txt.value = e.text;
+        txt.setAttribute("aria-label", "기록 내용 수정");
+      } else {
+        chip = document.createElement("span");
+        chip.className = "chip " + (e.kind || "none");
+        chip.textContent = kindLabel(e.kind);
+        if (!e.kind) chip.title = "1시간마다 자동으로 태그가 붙습니다. 수정에서 직접 고를 수도 있습니다.";
+        txt = document.createElement("span");
+        txt.className = "txt";
+        txt.textContent = e.text;
+      }
+      const next = this.entries[i + 1];
+      const mins = Math.max(0, (next ? minutesOf(next.time) : nowMin) - minutesOf(e.time));
+      const dur = document.createElement("span");
+      dur.className = "dur";
+      dur.textContent = next ? fmtMins(mins) : `${fmtMins(mins)} 째`;
+      dur.classList.toggle("live", !next);
+      const acts = document.createElement("span");
+      acts.className = "acts";
+      for (const [act, label] of [["edit", i === this.editing ? "저장" : "수정"], ["delete", "삭제"]]) {
+        const b = document.createElement("button");
+        b.dataset.act = act;
+        b.dataset.i = i;
+        b.textContent = label;
+        acts.append(b);
+      }
+      dur.append(acts);
+      li.append(time, chip, txt, dur);
+      return li;
+    }));
+    const box = $("#log-edit");
+    if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+  },
+  async change(body) {
+    const { status, data } = await api("/api/worklog", body).catch(() => ({ status: 0, data: {} }));
+    if (data.entries) this.entries = data.entries;
+    if (status !== 200) toast(data.error || "기록하지 못했습니다.");
+    this.render();
+    return status === 200;
+  },
+  async add() {
+    const text = this.input.value.trim();
+    if (!text) return;
+    this.addBtn.disabled = true;
+    this.editing = -1;
+    if (await this.change({ action: "add", kind: this.kindSel.value, text })) {
+      this.input.value = "";
+      this.kindSel.value = "";  // the next entry is auto-tagged unless a tag is picked again
+      this.list.scrollTop = this.list.scrollHeight;
+    } else {
+      this.addBtn.disabled = false;
+    }
+  },
+  async finishEdit(save) {
+    const i = this.editing;
+    if (i < 0) return;
+    const text = $("#log-edit").value.trim();
+    const kind = $("#log-edit-kind").value;
+    const e = this.entries[i];
+    this.editing = -1;
+    if (save && text && (text !== e.text || kind !== e.kind)) await this.change({ action: "edit", index: i, entry: e, text, kind });
+    else this.render();
+  },
+  async tagNow() {
+    this.setTagging(true);
+    try {
+      const { status, data } = await api("/api/worklog/tag", {}).catch(() => ({ status: 0, data: {} }));
+      if (status !== 200) { toast(data.error || "태그를 붙이지 못했습니다."); return; }
+      if (this.editing < 0) { this.entries = data.entries; this.render(); }
+      toast(data.tagged ? `${data.tagged}개 기록에 태그를 붙였습니다.` : "태그를 붙일 기록이 없습니다.");
+    } finally {
+      this.setTagging(false);
+    }
+  },
+  copy() {
+    const day = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+    const now = hhmm(new Date());
+    const lines = this.entries.map((e, i) =>
+      `- ${e.time}~${e.end || (this.entries[i + 1] || { time: now }).time} ${e.kind ? `[${WORKLOG_KINDS[e.kind]}] ` : ""}${e.text}`);
+    navigator.clipboard.writeText(`## ${day} 업무로그\n` + lines.join("\n"))
+      .then(() => toast("오늘 기록을 복사했습니다."), () => toast("복사하지 못했습니다. 브라우저 권한을 확인하세요."));
+  },
+};
+worklog.input.addEventListener("input", () => { worklog.addBtn.disabled = !worklog.input.value.trim(); });
+worklog.input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); worklog.add(); }
+});
+worklog.addBtn.addEventListener("click", () => worklog.add());
+worklog.kindSel.addEventListener("change", () => worklog.input.focus());
+worklog.tagBtn.addEventListener("click", () => worklog.tagNow());
+$(".copy", worklog.pad).addEventListener("click", () => worklog.copy());
+worklog.list.addEventListener("click", async e => {
+  const b = e.target.closest(".acts button");
+  if (!b) return;
+  const i = Number(b.dataset.i);
+  if (b.dataset.act === "delete") {
+    worklog.editing = -1;
+    worklog.change({ action: "delete", index: i, entry: worklog.entries[i] });
+  } else if (i === worklog.editing) {
+    worklog.finishEdit(true);
+  } else {
+    if (worklog.editing >= 0) await worklog.finishEdit(true);
+    worklog.editing = i;
+    worklog.render();
+  }
+});
+worklog.list.addEventListener("keydown", e => {
+  if (!["log-edit", "log-edit-kind"].includes(e.target.id) || e.isComposing) return;
+  if (e.key === "Enter") { e.preventDefault(); worklog.finishEdit(true); }
+  if (e.key === "Escape") { e.preventDefault(); worklog.finishEdit(false); }
+});
+
+// ---------------------------------------------------------------- session terminals
+// On Windows the server runs each session in a pseudo console; its screen is streamed here (long poll) and
+// drawn with xterm.js, so sessions open as tabs inside this page, e.g. inside Obsidian's Custom Frames pane.
+const KIND_LABEL = { simple: "단순처리", learning: "학습" };
+// Light gray screen with black text. ANSI colors are darkened to stay readable on it;
+// "white" maps to dark grays because programs use it as their normal text color on dark terminals.
+const XTERM_THEME = {
+  background: "#D4D4D4", foreground: "#303030", cursor: "#000000", cursorAccent: "#D4D4D4",
+  selectionBackground: "rgba(41, 107, 158, 0.3)",
+  black: "#000000", red: "#A1260D", green: "#1E6B3A", yellow: "#7A5000", blue: "#1D4E75", magenta: "#7A3B74",
+  cyan: "#00646A", white: "#4A4A4A", brightBlack: "#555555", brightRed: "#B8321A", brightGreen: "#256F41",
+  brightYellow: "#8A5A00", brightBlue: "#296B9E", brightMagenta: "#90518B", brightCyan: "#00797A", brightWhite: "#2B2B2B",
+};
+const sessions = { map: new Map(), ver: null, view: "memo", focusNext: null };
+const tabsNav = $("#tabs"), termview = $("#termview"), screenBox = $("#termview .screen");
+
+function b64bytes(s) {
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function ensureTerm(info) {
+  let s = sessions.map.get(info.sid);
+  if (s) return s;
+  const el = document.createElement("div");
+  el.className = "xt";
+  el.hidden = true;
+  screenBox.append(el);
+  const term = new Terminal({
+    cols: 120, rows: 30, scrollback: 5000, cursorBlink: true, theme: XTERM_THEME,
+    fontFamily: '"D2Coding", "Cascadia Mono", Consolas, monospace', fontSize: 16,
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  s = { sid: info.sid, term, fit, el, off: 0, size: "", opened: false, unread: false, queue: [], sending: false, wasAlive: true };
+  term.onData(d => sendInput(s, d));
+  term.attachCustomKeyEventHandler(e => termKey(s, e));
+  sessions.map.set(info.sid, s);
+  return s;
+}
+
+function termKey(s, e) {
+  if (e.type !== "keydown") return true;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.shiftKey && !e.altKey && e.key === "c" && s.term.hasSelection()) {
+    navigator.clipboard.writeText(s.term.getSelection()).catch(() => {});
+    s.term.clearSelection();
+    return false;
+  }
+  if (mod && !e.altKey && e.key.toLowerCase() === "v") return false;  // the browser pastes; xterm sends it on
+  if (e.key === "Enter" && e.shiftKey && !mod) {  // newline in Claude Code's prompt (same as Alt+Enter)
+    e.preventDefault();
+    sendInput(s, "\x1b\r");
+    return false;
+  }
+  return true;
+}
+
+function sendInput(s, data) {
+  if (!s.alive) return;
+  s.queue.push(data);
+  if (!s.sending) flushInput(s);
+}
+
+async function flushInput(s) {
+  // One request at a time keeps keystrokes in order.
+  s.sending = true;
+  while (s.queue.length) {
+    const data = s.queue.splice(0).join("");
+    await api("/api/term/input", { sid: s.sid, data }).catch(() => {});
+  }
+  s.sending = false;
+}
+
+function fitTerm(s) {
+  if (!s || !s.opened || s.el.hidden) return;
+  try { s.fit.fit(); } catch (e) {}
+  const size = `${s.term.cols}x${s.term.rows}`;
+  if (size !== s.size && s.alive) {
+    s.size = size;
+    api("/api/term/resize", { sid: s.sid, cols: s.term.cols, rows: s.term.rows }).catch(() => {});
+  }
+}
+
+function showView(view) {
+  if (view !== "memo" && !sessions.map.has(view)) view = "memo";
+  sessions.view = view;
+  document.body.classList.toggle("view-term", view !== "memo");
+  for (const s of sessions.map.values()) s.el.hidden = s.sid !== view;
+  renderTabs();
+  const s = sessions.map.get(view);
+  if (!s) return;
+  s.unread = false;
+  if (!s.opened) { s.term.open(s.el); s.opened = true; }  // opened while visible so xterm can measure the font
+  renderBar(s);
+  fitTerm(s);
+  s.term.focus();
+}
+
+function renderBar(s) {
+  const bar = $(".bar", termview);
+  bar.style.setProperty("--accent", `var(--${s.kind})`);
+  $(".k", bar).textContent = KIND_LABEL[s.kind] || "";
+  setText($(".q", bar), (s.title || s.text).replace(/\s+/g, " "));
+  setAttr($(".q", bar), "title", s.title ? `${s.title}\n\n${s.text}` : s.text);
+  $(".cwd", bar).textContent = s.cwd;
+  $(".cwd", bar).title = s.cwd;
+  $(".st", bar).textContent = s.alive ? "실행 중" : `종료됨${s.exit ? ` (코드 ${s.exit})` : ""}`;
+}
+
+function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+function setAttr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+
+function makeTab(view) {
+  const b = document.createElement("button");
+  b.dataset.view = view;
+  const label = document.createElement("span");
+  label.className = "label";
+  if (view === "memo") { label.textContent = "메모장"; b.append(label); return b; }
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  const x = document.createElement("span");
+  b.append(dot, label, x);
+  return b;
+}
+
+function renderTabs() {
+  // Tabs are updated in place, never rebuilt: sessions stream output many times a second, and a button
+  // replaced between mousedown and mouseup would swallow the click.
+  const views = ["memo", ...sessions.map.keys()];
+  const have = new Map([...tabsNav.children].map(b => [b.dataset.view, b]));
+  for (const [view, b] of have) if (!sessions.map.has(view) && view !== "memo") b.remove();
+  views.forEach((view, i) => {
+    const b = have.get(view) || makeTab(view);
+    if (tabsNav.children[i] !== b) tabsNav.insertBefore(b, tabsNav.children[i] || null);
+    const s = sessions.map.get(view);
+    if (!s) { setAttr(b, "class", "tab" + (sessions.view === "memo" ? " on" : "")); return; }
+    setAttr(b, "class", `tab ${s.kind}` + (sessions.view === view ? " on" : "") + (s.alive ? "" : " done")
+      + (s.unread ? " unread" : ""));
+    setAttr(b, "title", `${KIND_LABEL[s.kind] || ""} · ${s.title ? `${s.title}\n\n` : ""}${s.text}`);
+    setText($(".label", b), (s.title || s.text).replace(/\s+/g, " "));
+    const x = $(".x", b) || b.lastElementChild;
+    setAttr(x, "class", "x" + (s.arm ? " arm" : ""));
+    setText(x, s.arm ? "종료?" : "×");
+    setAttr(x, "title", s.alive ? "세션 종료" : "탭 닫기");
+  });
+  document.body.classList.toggle("has-terms", sessions.map.size > 0);
+  document.body.style.setProperty("--tabs-h", `${tabsNav.offsetHeight}px`);
+}
+
+async function closeTab(s) {
+  // A running session needs a second click, so a stray click does not end the work.
+  if (s.alive && !s.arm) {
+    s.arm = true;
+    renderTabs();
+    setTimeout(() => { s.arm = false; renderTabs(); }, 3000);
+    return;
+  }
+  s.arm = false;
+  await api("/api/term/close", { sid: s.sid }).catch(() => {});
+}
+
+tabsNav.addEventListener("click", e => {
+  const b = e.target.closest(".tab");
+  if (!b) return;
+  const s = sessions.map.get(b.dataset.view);
+  if (s && e.target.closest(".x")) closeTab(s);
+  else showView(b.dataset.view);
+});
+
+function syncTerms(data) {
+  sessions.ver = data.ver;
+  const seen = new Set();
+  for (const info of data.terms) {
+    seen.add(info.sid);
+    const s = ensureTerm(info);
+    Object.assign(s, { kind: info.kind, text: info.text, title: info.title || "", cwd: info.cwd,
+                       alive: info.alive, exit: info.exit });
+    if (info.data) {
+      if (info.reset) s.term.reset();
+      s.term.write(b64bytes(info.data));
+      if (sessions.view !== s.sid) s.unread = true;
+    }
+    s.off = info.end;
+    if (s.wasAlive && !s.alive) {
+      s.wasAlive = false;
+      s.term.write("\r\n\x1b[2m[세션이 끝났습니다. 탭의 ×로 닫을 수 있습니다.]\x1b[0m\r\n");
+    }
+  }
+  for (const [sid, s] of sessions.map) {
+    if (seen.has(sid)) continue;
+    s.term.dispose();
+    s.el.remove();
+    sessions.map.delete(sid);
+  }
+  const next = sessions.focusNext;
+  if (next && sessions.map.has(next)) { sessions.focusNext = null; showView(next); return; }
+  if (sessions.view !== "memo" && !sessions.map.has(sessions.view)) { showView("memo"); return; }
+  renderTabs();
+  const cur = sessions.map.get(sessions.view);
+  if (cur) renderBar(cur);
+}
+
+async function termLoop() {
+  while (!closed) {
+    const offsets = {};
+    for (const s of sessions.map.values()) offsets[s.sid] = s.off;
+    const { status, data } = await api("/api/term/poll", { offsets, ver: sessions.ver }).catch(() => ({ status: 0 }));
+    if (closed) return;
+    if (status === 200) syncTerms(data);
+    else await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+// ---------------------------------------------------------------- source of pasted Obsidian text
+// Text copied from an Obsidian note does not say which note it came from. The pasted text goes in right away;
+// meanwhile the server looks it up in the Obsidian vaults, and if a note contains it, a line with the note's path
+// is added after it, so the new session can open the note for the surrounding context.
+async function pasteSource(text) {
+  if (!text || text.trim().length < 10) return null;
+  const { status, data } = await api("/api/source", { text }).catch(() => ({ status: 0, data: {} }));
+  const s = status === 200 && data.source;
+  if (!s) return null;
+  const lines = s.line === s.end ? `${s.line}` : `${s.line}-${s.end}`;
+  return { line: `(출처: ${s.path}:${lines})`, name: s.path.split(/[\\/]/).pop() };
+}
+
+// Memo textareas: the line goes right after the pasted text, if the memo still holds it there.
+document.addEventListener("paste", e => {
+  const ta = e.target;
+  if (!(ta instanceof HTMLTextAreaElement) || !ta.closest(".memo")) return;
+  const pasted = ((e.clipboardData && e.clipboardData.getData("text/plain")) || "").replace(/\r\n?/g, "\n");
+  const at = ta.selectionStart;
+  pasteSource(pasted).then(src => {
+    const end = at + pasted.length;
+    if (!src || !ta.isConnected || ta.value.slice(at, end) !== pasted) return;
+    const caretAtEnd = ta.selectionStart === end && ta.selectionEnd === end;
+    ta.setRangeText((pasted.endsWith("\n") ? "" : "\n") + src.line + "\n", end, end, caretAtEnd ? "end" : "preserve");
+    toast(`출처를 붙였습니다: ${src.name}`);
+  });
+});
+
+// Session tabs: xterm stops the paste event at its own textarea, so this listens in the capture phase.
+// The line is sent as a second paste, after the text xterm has already sent to the session.
+screenBox.addEventListener("paste", e => {
+  const s = sessions.map.get(sessions.view);
+  const text = (e.clipboardData && e.clipboardData.getData("text/plain")) || "";
+  if (!s || !s.alive) return;
+  pasteSource(text).then(src => {
+    if (!src || !s.alive) return;
+    s.term.paste(`\n${src.line}\n`);
+    toast(`출처를 붙였습니다: ${src.name}`);
+  });
+}, true);
+
+new ResizeObserver(() => fitTerm(sessions.map.get(sessions.view))).observe(screenBox);
+window.addEventListener("resize", () => document.body.style.setProperty("--tabs-h", `${tabsNav.offsetHeight}px`));
+
+if (CWD) setCwd(CWD);
+worklog.load();
+refresh();
+if (typeof Terminal !== "undefined") termLoop();
+// The work log reloads with each poll, which also moves the clock and the running time of the last entry.
+const poll = setInterval(() => { refresh(); worklog.load(); }, 3000);
+$("textarea", pads.learning).focus();
+</script>
+</body>
+</html>

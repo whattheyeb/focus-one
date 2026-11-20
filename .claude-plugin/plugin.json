@@ -1,0 +1,5 @@
+{
+  "name": "focus-one",
+  "version": "0.1.0",
+  "description": "A memo pad with separate simple-task and learning areas. Each note opens as a new Claude Code session, and a second learning session triggers a warning."
+}
