@@ -197,14 +197,69 @@ def find_history(session):
     return None
 
 
+HISTORY_LOCK = threading.Lock()  # append_history and delete_history both write history.jsonl
+
+
 def append_history(kind, text, cwd, session):
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with HISTORY_FILE.open("a", encoding="utf-8") as f:
+    with HISTORY_LOCK, HISTORY_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps({"time": stamp, "kind": kind, "cwd": cwd, "text": text, "session": session},
                            ensure_ascii=False) + "\n")
     md_name, _ = KINDS[kind]
     with (DATA_DIR / md_name).open("a", encoding="utf-8") as f:
         f.write(f"### {stamp} · `{cwd}`\n\n{text}\n\n")
+
+
+def delete_history(cwd, session, time_, text):
+    """Remove one entry from the recent list: matched by session id, or by time and text for entries written
+    before resume support. Claude Code's transcript is removed separately by delete_transcript.
+    Returns the number of lines removed."""
+    def match(item):
+        if item.get("cwd") != cwd:
+            return False
+        if session:
+            return item.get("session") == session
+        return not item.get("session") and item.get("time") == time_ and item.get("text") == text
+    with HISTORY_LOCK:
+        if not HISTORY_FILE.exists():
+            return 0
+        keep, removed = [], 0
+        for line in HISTORY_FILE.read_text("utf-8").splitlines():
+            try:
+                hit = match(json.loads(line))
+            except (ValueError, AttributeError):
+                hit = False
+            if hit:
+                removed += 1
+            else:
+                keep.append(line)
+        if removed:
+            tmp = HISTORY_FILE.with_suffix(".tmp")
+            tmp.write_text("".join(l + "\n" for l in keep), "utf-8")
+            os.replace(tmp, HISTORY_FILE)
+        return removed
+
+
+def delete_transcript(session):
+    """Delete everything Claude Code keeps for `session`, so `claude --resume` can no longer open it:
+    the transcript (projects/*/<id>.jsonl), its subagent/tool-output folder (projects/*/<id>/),
+    file-edit backups (file-history/<id>/) and session-env/<id>/. `session` must be a validated UUID.
+    Returns the number of paths removed; raises OSError if one could not be removed (e.g. still in use)."""
+    paths = list((CONFIG_DIR / "projects").glob(f"*/{session}.jsonl"))
+    paths += list((CONFIG_DIR / "projects").glob(f"*/{session}"))
+    paths += [CONFIG_DIR / "file-history" / session, CONFIG_DIR / "session-env" / session]
+    removed = 0
+    for p in paths:
+        if p.is_dir():
+            shutil.rmtree(p)
+        elif p.exists():
+            p.unlink()
+        else:
+            continue
+        removed += 1
+    with _title_lock:
+        _title_cache.pop(session, None)
+    return removed
 
 
 def recent_history(cwd, limit=5):
@@ -1022,6 +1077,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "세션을 시작한 폴더를 찾을 수 없습니다."})
             manual, term = launch_session(item["kind"], item["text"], item["cwd"], resume=session)
             return self._send(200, {"ok": True, "manual": manual, "term": term, "kind": item["kind"]})
+        if self.path == "/api/history/delete":
+            session = str(body.get("session") or "")
+            if session and not UUID_RE.fullmatch(session):
+                return self._send(400, {"error": "잘못된 세션입니다."})
+            if session and any(m.get("claude_session") == session for m in live_sessions()):
+                return self._send(409, {"error": "열려 있는 세션은 지울 수 없습니다."})
+            if not cwd:
+                return self._send(400, {"error": "폴더를 찾을 수 없습니다."})
+            # Transcript first: if it is still in use, the list entry stays so the delete can be retried.
+            try:
+                purged = delete_transcript(session) if session else 0
+            except OSError as e:
+                return self._send(500, {"error": f"대화 기록 파일을 지우지 못했습니다: {e}"})
+            if not delete_history(cwd, session, str(body.get("time") or ""), str(body.get("text") or "")) \
+                    and not purged:
+                return self._send(404, {"error": "기록을 찾을 수 없습니다."})
+            return self._send(200, {"ok": True})
         if self.path == "/api/term/poll":
             offsets = {k: v for k, v in (body.get("offsets") or {}).items() if isinstance(v, int)}
             result = term_poll(offsets, body.get("ver"))

@@ -190,11 +190,12 @@
   ul.recent li { font-size: 13px; color: var(--muted); display: flex; gap: 8px; padding: 1px 0; }
   ul.recent time { flex: none; font-family: var(--mono); font-variant-numeric: tabular-nums; }
   ul.recent .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ul.recent .resume {
+  ul.recent .resume, ul.recent .del {
     flex: none; font: inherit; font-size: 12px; color: var(--accent); background: var(--paper); cursor: pointer;
     border: 1px solid var(--frame); border-radius: 6px; padding: 0 8px; box-shadow: var(--bevel);
   }
-  ul.recent .resume:active { box-shadow: var(--bevel-in); }
+  ul.recent .del { color: var(--muted); }
+  ul.recent .resume:active, ul.recent .del:active { box-shadow: var(--bevel-in); }
   ul.recent .open { flex: none; font-size: 12px; color: var(--accent); }
   #toast {
     position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--toast-bg); color: var(--toast-ink);
@@ -375,6 +376,16 @@ function renderRecent(kind, items) {
       b.dataset.session = it.session;
       li.append(b);
     }
+    if (!it.open) {
+      const d = document.createElement("button");
+      d.className = "del";
+      d.textContent = "삭제";
+      d.title = it.session ? "대화 기록을 완전히 지웁니다 (claude --resume으로도 열 수 없음)" : "목록에서 이 기록을 지웁니다";
+      d.dataset.session = it.session || "";
+      d.dataset.time = it.time;
+      d.dataset.text = it.text;
+      li.append(d);
+    }
     return li;
   }));
 }
@@ -388,6 +399,21 @@ async function resume(btn) {
   if (data.manual) $("code", manual).textContent = data.manual;
   if (data.term) sessions.focusNext = data.term;
   toast("세션을 다시 열었습니다.");
+  refresh();
+}
+
+async function deleteRecent(btn) {
+  const li = btn.closest("li");
+  const name = $(".t", li).textContent;
+  const msg = btn.dataset.session
+    ? "이 세션의 대화 기록을 완전히 지울까요?\n지우면 이어하기와 claude --resume 모두 쓸 수 없고, 되돌릴 수 없습니다."
+    : "이 기록을 목록에서 지울까요?";
+  if (!confirm(`${msg}\n\n${name}`)) return;
+  btn.disabled = true;
+  const { status, data } = await api("/api/history/delete",
+    { session: btn.dataset.session, time: btn.dataset.time, text: btn.dataset.text }).catch(() => ({ status: 0, data: {} }));
+  if (status !== 200) { btn.disabled = false; toast(data.error || "기록을 지우지 못했습니다."); return; }
+  toast("기록을 지웠습니다.");
   refresh();
 }
 
@@ -511,6 +537,8 @@ for (const [kind, pad] of Object.entries(pads)) {
   $("ul.recent", pad).addEventListener("click", e => {
     const b = e.target.closest(".resume");
     if (b) resume(b);
+    const d = e.target.closest(".del");
+    if (d) deleteRecent(d);
   });
   const warn = $(".warn", pad);
   warn.addEventListener("click", e => {
